@@ -1,0 +1,3 @@
+[submodule "src/GasTranSim.jl"]
+	path = src/GasTranSim.jl
+	url = https://github.com/cmhyett/GasTranSim.jl.git
