@@ -34,6 +34,8 @@ function runScenarios(scenNumArr::Array{Int,1})
         writeParamsJSON(csvSpecPath * "/network_data/params_scen$(num).csv",
                         jsonSpecPath * "/params.json");
 
+        writeDisruptionsJSON(jsonSpecPath * "/disruptions.json");
+
         folder = jsonSpecPath;
 
         ts = initialize_simulator(folder; eos=:full_cnga);
