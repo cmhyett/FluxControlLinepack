@@ -76,30 +76,55 @@ function monteCarlo(scenNum::Int, numRuns; mu=0.0, sigma=0.1)
 
     folder = jsonSpecPath;
 
-    function clip(minVal, maxVal, val)
-        return max(min(maxVal, val), minVal)
+    function moving_average(arr,n)
+        @assert isodd(n);
+        result = zeros(length(arr));
+        n2 = floor(Int, n/2);
+        for i in n2+1:length(arr)-n2
+            result[i] = sum(arr[i-n2:i+n2])/n;
+        end
+        for i in 1:n2
+            result[i] = (sum(arr[end-n2+i:end]) + sum(arr[1:i+n2]))/n;
+        end
+        for i in length(arr)-n2+1:length(arr)
+            result[i] = (sum(arr[i-n2:end]) + sum(arr[1:i-length(arr)+n2]))/n;
+        end
+        return result;
     end
-    
+
+    demandNodes = [2,3,4,5,6,7,9,10,11];
+    perturbedBCs = Dict();
+    begin
+        local ts = initialize_simulator(folder; eos=:full_cnga);
+        for key in demandNodes
+            println("key = $(key)");
+            old_spline = ts.boundary_conditions[:node][key]["spl"];
+            new_spline = Spline1D(old_spline.t[2:end-1], moving_average(old_spline.c, 5), k=2);
+            t = new_spline.t;
+            b = sigma;
+            v = var(old_spline.(t));
+            localSigma = mean(old_spline.c) * b;
+            localTheta = localSigma^2/(2*v);
+            u0 = new_spline(0);
+            f(u,p,t) = localTheta*(new_spline(t)-u);
+            g(u,p,t) = localSigma;
+            prob = SDEProblem(f, g, u0, (t[1], t[end]));
+            eprob = EnsembleProblem(prob);
+            sol = solve(eprob, EM(), dt=0.1, saveat=old_spline.t, trajectories=numRuns);
+            push!(perturbedBCs, key=>sol);
+        end
+    end
     Threads.@threads for i in 1:numRuns
         println("Starting run number $(i)");
-        local ts = initialize_simulator(folder; eos=:simple_cnga);
-        for key in keys(ts.boundary_conditions[:node])
+        local ts = initialize_simulator(folder; eos=:full_cnga);
+        for key in demandNodes
             old_spline = ts.boundary_conditions[:node][key]["spl"];
-            if (mean(old_spline.c) > 0) #demand node
-                localMean = (rand()-0.5)*mu*mean(old_spline.c);
-                localStd = mean(old_spline.c) * sigma;
-                #randVals = clip.(localMean - 2*localStd, localMean + 2*localStd, randn(length(old_spline.c)) .* localStd .+ localMean);
-                # if (i == 1) #do max perturbation on all nodes
-                #     randVals = (ones(length(old_spline.c)) .- 0.5) .* localStd .+ (localMean);
-                # elseif (i == 2) #do -max perturbation on all nodes
-                #     randVals = (zeros(length(old_spline.c)) .- 0.5) .* localStd .+ (localMean);
-                # else #random draw
-                    randVals = (rand(length(old_spline.c)) .- 0.5) .* localStd .+ (localMean);
-                # end
-                new_vals = old_spline.c .+ randVals;
-                ts.boundary_conditions[:node][key]["spl"] =
-                    Spline1D(old_spline.t[2:end-1], new_vals, k=1);
-            end
+            localMean = (rand()-0.5)*mu*mean(old_spline.c);
+            localStd = mean(old_spline.c) * sigma;
+            randVals = (rand(length(old_spline.c)) .- 0.5) .* localStd .+ (localMean);
+            new_vals = old_spline.c .+ randVals;
+            ts.boundary_conditions[:node][key]["spl"] =
+                Spline1D(old_spline.t[2:end-1], new_vals, k=1);
         end
         run_simulator!(ts);
         push!(tsResults, i=>ts);
