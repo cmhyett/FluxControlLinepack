@@ -1,5 +1,7 @@
 basepath = pwd() * "/../";
 using Pkg;
+Pkg.activate(basepath);
+Pkg.instantiate();
 using GasTranSim, Serialization, Plots;
 include(basepath * "./examples/runExample.jl");
 include(basepath * "./src/plotting.jl");
