@@ -6,6 +6,8 @@ using Tables;
 using Serialization;
 using Printf;
 using Dierckx;
+using DifferentialEquations;
+
 basepath = pwd() * "/";
 include(basepath * "/src/csvToJSON.jl");
 include(basepath * "/src/plotting.jl");
@@ -49,7 +51,7 @@ end
 
 # sigma,mu percentage of average mass flux at node,
 #  so mu=0, sigma=0.1 is N(0, 0.1*mean(ts.bc[:node][i]))
-function monteCarlo(scenNum::Int, numRuns; mu=0.0, sigma=0.1)
+function monteCarlo(scenNum::Int, numRuns; sigma=0.5, numNeighbors=11)
     tsResults = Dict();
     csvSpecPath = basepath * "examples/israelNetwork/reducedNetwork/csvSpecification/";
     jsonSpecPath = csvSpecPath * "../jsonSpec_scen$(scenNum)/";
@@ -99,32 +101,35 @@ function monteCarlo(scenNum::Int, numRuns; mu=0.0, sigma=0.1)
         for key in demandNodes
             println("key = $(key)");
             old_spline = ts.boundary_conditions[:node][key]["spl"];
-            new_spline = Spline1D(old_spline.t[2:end-1], moving_average(old_spline.c, 5), k=2);
-            t = new_spline.t;
+            new_spline = Spline1D(old_spline.t[2:end-1], moving_average(old_spline.c, numNeighbors), k=2);
+            t = old_spline.t[1:end-1];
             b = sigma;
-            v = var(old_spline.(t));
+            v = var(old_spline.(t))*(1/sigma);
             localSigma = mean(old_spline.c) * b;
-            localTheta = localSigma^2/(2*v);
+            localTheta = 10;
+            localSigma = sqrt(2*localTheta*sigma*mean(old_spline.c)); #var = sigma*var(old)
             u0 = new_spline(0);
             f(u,p,t) = localTheta*(new_spline(t)-u);
             g(u,p,t) = localSigma;
             prob = SDEProblem(f, g, u0, (t[1], t[end]));
-            eprob = EnsembleProblem(prob);
-            sol = solve(eprob, EM(), dt=0.1, saveat=old_spline.t, trajectories=numRuns);
+            function prob_func(prob,i,repeat)
+                return prob; #independent noise
+                #return remake(prob, seed=i) #same noise for each node
+            end
+            eprob = EnsembleProblem(prob, prob_func=prob_func);
+            sol = solve(eprob, EM(), dt=0.1, saveat=t, trajectories=numRuns);
             push!(perturbedBCs, key=>sol);
         end
+    end
+    if (perturbedBCs[6][1].retcode != :Success)
+        println("setting up boundary conditions failed!");
+        return 0;
     end
     Threads.@threads for i in 1:numRuns
         println("Starting run number $(i)");
         local ts = initialize_simulator(folder; eos=:full_cnga);
         for key in demandNodes
-            old_spline = ts.boundary_conditions[:node][key]["spl"];
-            localMean = (rand()-0.5)*mu*mean(old_spline.c);
-            localStd = mean(old_spline.c) * sigma;
-            randVals = (rand(length(old_spline.c)) .- 0.5) .* localStd .+ (localMean);
-            new_vals = old_spline.c .+ randVals;
-            ts.boundary_conditions[:node][key]["spl"] =
-                Spline1D(old_spline.t[2:end-1], new_vals, k=1);
+            ts.boundary_conditions[:node][key]["spl"].c .= perturbedBCs[key][i].u;
         end
         run_simulator!(ts);
         push!(tsResults, i=>ts);
