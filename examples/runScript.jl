@@ -1,4 +1,4 @@
-basepath = pwd() * "../";
+basepath = pwd() * "/../";
 using Pkg;
 using GasTranSim, Serialization, Plots;
 include(basepath * "./examples/runExample.jl");
