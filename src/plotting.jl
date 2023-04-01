@@ -298,8 +298,8 @@ function plotMonteCarlo(runs; nodes=[1,6,8], quantiles=[0.125, 0.375, 0.5, 0.625
     numTicks = floor(Int, t_hrs[end]/hrsPerTick);
     plot!(p, xlabel="time (hrs)", ylabel = "Pressure (pa)", legend=:bottomleft, xticks=([hrsPerTick*i for i in 1:numTicks]));
 
-    addedPressureCrossings =
-        addPressureCrossings(p, runs, nodes=[1,6,9], quantiles=[0.125, 0.375, 0.5, 0.625, 0.875]);
+    addedPressureCrossings = false;
+#        addPressureCrossings(p, runs, nodes=[1,6,9], quantiles=[0.125, 0.375, 0.5, 0.625, 0.875]);
 
     if (!addedPressureCrossings) #don't muddy picture with linepack if we have pressure issues
         qs = [quantile(linepack[:,i], quantiles) for i in 1:size(linepack)[2]];
