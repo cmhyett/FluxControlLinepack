@@ -4,7 +4,7 @@ using GasTranSim, Serialization, Plots;
 include(basepath * "./examples/runExample.jl");
 include(basepath * "./src/plotting.jl");
 
-scenNum, nRuns, mu, sigma = ARGS;
+scenNum, nRuns, sigma = ARGS;
 nRuns = parse(Int,nRuns);
 scenNum = parse(Int, scenNum);
 sigma = parse(Float64, sigma);
