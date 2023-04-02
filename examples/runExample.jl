@@ -8,9 +8,6 @@ using Printf;
 using Dierckx;
 using DifferentialEquations;
 
-basepath = pwd() * "/";
-include(basepath * "/src/csvToJSON.jl");
-include(basepath * "/src/plotting.jl");
 
 function runScenarios(scenNumArr::Array{Int,1})
     tsResults = [];
