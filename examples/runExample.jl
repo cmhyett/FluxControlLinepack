@@ -46,9 +46,7 @@ function runScenarios(scenNumArr::Array{Int,1})
     return tsResults;
 end
 
-# sigma,mu percentage of average mass flux at node,
-#  so mu=0, sigma=0.1 is N(0, 0.1*mean(ts.bc[:node][i]))
-function monteCarlo(scenNum::Int, numRuns; sigma=0.5, numNeighbors=11)
+function monteCarlo(scenNum::Int, numRuns; sigma=0.01, numNeighbors=11)
     tsResults = Dict();
     csvSpecPath = basepath * "examples/israelNetwork/reducedNetwork/csvSpecification/";
     jsonSpecPath = csvSpecPath * "../jsonSpec_scen$(scenNum)/";
@@ -102,16 +100,15 @@ function monteCarlo(scenNum::Int, numRuns; sigma=0.5, numNeighbors=11)
             t = old_spline.t[1:end-1];
             b = sigma;
             v = var(old_spline.(t))*(1/sigma);
-            localSigma = mean(old_spline.c) * b;
-            localTheta = 10;
-            localSigma = sqrt(2*localTheta*sigma*mean(old_spline.c)); #var = sigma*var(old)
+            localTheta = 10; #we're interested in theta->\infty, but can't be too high otherwise stiffness
+            localSigma = sqrt(2*localTheta*sigma*(mean(old_spline.c)^2)); #var = sigma*mean^2
             u0 = new_spline(0);
             f(u,p,t) = localTheta*(new_spline(t)-u);
             g(u,p,t) = localSigma;
             prob = SDEProblem(f, g, u0, (t[1], t[end]));
             function prob_func(prob,i,repeat)
                 return prob; #independent noise
-                #return remake(prob, seed=i) #same noise for each node
+                #return remake(prob, seed=i) #same noise for each node, strong effects here
             end
             eprob = EnsembleProblem(prob, prob_func=prob_func);
             sol = solve(eprob, EM(), dt=0.1, saveat=t, trajectories=numRuns);
