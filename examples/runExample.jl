@@ -9,7 +9,7 @@ using Dierckx;
 using DifferentialEquations;
 
 
-function runScenarios(scenNumArr::Array{Int,1})
+function runScenarios(scenNumArr::Array{Int,1}, basepath)
     tsResults = [];
     for num in scenNumArr
         csvSpecPath = basepath * "examples/israelNetwork/reducedNetwork/csvSpecification/";
@@ -46,7 +46,7 @@ function runScenarios(scenNumArr::Array{Int,1})
     return tsResults;
 end
 
-function monteCarlo(scenNum::Int, numRuns; sigma=0.01, numNeighbors=11)
+function monteCarlo(scenNum::Int, numRuns, basepath; sigma=0.01, numNeighbors=11)
     tsResults = Dict();
     csvSpecPath = basepath * "examples/israelNetwork/reducedNetwork/csvSpecification/";
     jsonSpecPath = csvSpecPath * "../jsonSpec_scen$(scenNum)/";

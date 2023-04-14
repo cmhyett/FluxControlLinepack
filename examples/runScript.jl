@@ -13,7 +13,7 @@ sigma = parse(Float64, sigma);
 
 outputPath = basepath * "/results/";
 mkpath(outputPath);
-sol = monteCarlo(scenNum, nRuns; sigma=sigma);
+sol = monteCarlo(scenNum, nRuns, basepath; sigma=sigma);
 serialize(outputPath * "scen$(scenNum)_$(nRuns)runs_mean_width$(sigma).jls", sol);
 p = plotMonteCarlo(sol);
 savefig(p, outputPath * "scen$(scenNum)_$(nRuns)runs_mean_width$(sigma).png");
