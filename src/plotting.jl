@@ -112,17 +112,17 @@ function linepackPlot(ts; currentTime_hrs = nothing)
     
     southKeys = ["2", "3", "4", "5"];
 
-    pressureLimits = Dict("1"=>58*1e5,
-                          "2"=>53*1e5,
-                          "3"=>53*1e5,
-                          "4"=>53*1e5,
-                          "5"=>51*1e5,
+    pressureLimits = Dict("1"=>50*1e5,
+                          "2"=>50*1e5,
+                          "3"=>50*1e5,
+                          "4"=>50*1e5,
+                          "5"=>50*1e5,
                           "6"=>50*1e5,
-                          "7"=>55*1e5,
-                          "8"=>55*1e5,
+                          "7"=>50*1e5,
+                          "8"=>50*1e5,
                           "9"=>50*1e5,
-                          "10"=>45*1e5,
-                          "11"=>45*1e5);
+                          "10"=>50*1e5,
+                          "11"=>50*1e5);
     pressureCrossings = Dict();
     
     for p in keys(ts.sol["pipes"])
@@ -188,12 +188,18 @@ end
 function plotNetworkDiagram(ts)
     x = [];
     y = [];
+    source_x = [];
+    source_y = [];
     nodeNums = [];
     for k in keys(ts.data["nodes"])
         if (k != "12" && k != "13") #12 & 13 are fictitious
             push!(x, ts.data["nodes"][k]["x_coord"]);
             push!(y, ts.data["nodes"][k]["y_coord"]);
             push!(nodeNums, k)
+        end
+        if (k == "1" || k == "8")
+            push!(source_x, ts.data["nodes"][k]["x_coord"]);
+            push!(source_y, ts.data["nodes"][k]["y_coord"]);
         end
     end
     Δx = maximum(x) - minimum(x)
@@ -232,11 +238,18 @@ function plotNetworkDiagram(ts)
              markeralpha= 1.0,
              markercolor= :lightgreen,
              markerstrokewidth = 0.0)
+
+    scatter!(p, source_x, source_y,
+             markersize = 14.0,
+             markeralpha= 1.0,
+             markercolor= :red,
+             markerstrokewidth = 0.0)
+    
     plot!(p, annotations = (x, y, Plots.text.(nodeNums, :center)));
     return p;
 end
 
-function plot_pressure_profile(filename, ts; cm=cgrad(:roma, 10, categorical=true, scale=:exp), fps=15)
+function plot_pressure_profile(filename, ts; startNum=1, endNum=nothing, cm=cgrad(:roma, 10, categorical=true, scale=:exp), fps=15)
     x = [];
     y = [];
     nodeNums = [];
@@ -248,6 +261,9 @@ function plot_pressure_profile(filename, ts; cm=cgrad(:roma, 10, categorical=tru
         end
     end
     t = [ts.sol["pipes"]["1"]["density_profile"][i].t for i in 1:length(ts.sol["pipes"]["1"]["density_profile"])];
+    if (endNum == nothing)
+        endNum = length(t);
+    end
     Δx = maximum(x) - minimum(x)
     Δy = maximum(y) - minimum(y)
     Δs = max(Δx,Δy)
@@ -257,13 +273,11 @@ function plot_pressure_profile(filename, ts; cm=cgrad(:roma, 10, categorical=tru
     for i in 1:length(t)
         for k = keys(ts.data["pipes"])
             dp = ts.sol["pipes"][k]["density_profile"];
-            vmin = min(vmin, minimum(dp[i].val)) / 1e5;
-            vmax = max(vmax, maximum(dp[i].val)) / 1e5;
         end
     end
     vmax = 80;
     vmin = 40;
-    anim = @animate for num in 1:length(t)
+    anim = @animate for num in startNum:endNum
         plot(legend = false, aspect_ratio=:equal, showaxis=:hide, xaxis=nothing,
             yaxis=nothing, grid=false)
         for k = keys(ts.data["pipes"])
@@ -300,75 +314,16 @@ function plot_pressure_profile(filename, ts; cm=cgrad(:roma, 10, categorical=tru
         plot!(p1, annotations = (x, y, Plots.text.(nodeNums, :center)));
         h2 = scatter([0,0], [0,1], zcolor=[0,1], clims=(vmin,vmax),
                      xlims=(1,1.1), label="", c=cm, colorbar_title="Pressure (bar)", framestyle=:none, margin=0.0Plots.mm)
-        p2 = linepackPlot(ts, currentTime_hrs = t[num]/3600);
-        l = @layout [a{0.01w} a{0.4w} a{0.6w}]
-        p = plot(h2, p1, p2, layout=l, link=:all, size=(1200,800), margin=10Plots.mm, right_margin=20Plots.mm);
-        if (num == floor(Int, length(t)/2))
-            savefig(p, filename*".png");
-        end
+        #        p2 = linepackPlot(ts, currentTime_hrs = t[num]/3600);
+        p2 = plotPressure(ts, plims=(45,83));
+        scatter!(p2, [t[num]/3600], [45.5], ylims=ylims(p2), markershape=:utriangle, markercolor=:blue,
+                 markersize=6,label=nothing);
+        l = @layout [a{0.1w} a{0.3w} a{0.6w}]
+        p = plot(h2, p1, p2, layout=l, link=:all, size=(1200,600), margin=10Plots.mm, right_margin=20Plots.mm);
         p;
     end
     gif(anim, filename, fps = fps)
 end
-
-# function plotMonteCarlo(runs; nodes=[1,6,8], quantiles=[0.125, 0.375, 0.5, 0.625, 0.875],
-#                         plotLinepack=true) #runs = Dict(Int, transientsim)
-#     @assert isodd(length(quantiles));
-#     p = plot();
-#     ks = Array([keys(runs)...]);
-#     t_hrs = runs[ks[1]].sol["time_points"] ./ 3600;
-
-#     linepack = zeros(length(ks), length(t_hrs))
-#     for i in 1:length(ks)
-#         local ts = runs[ks[i]];
-#         for n in keys(ts.sol["pipes"])
-#             pipe = ts.sol["pipes"][n];
-#             avgPressure = [mean(pipe["density_profile"][i].val) for i in 1:length(pipe["density_profile"])];
-#             avgDensity = GasTranSim._pressure_to_density_full_cnga(avgPressure ./ ts.nominal_values[:pressure],
-#                                                                    ts.nominal_values,
-#                                                                    ts.params) .* ts.nominal_values[:density];
-#             len = ts.data["pipes"][n]["length"] * ts.nominal_values[:length];
-#             area = ts.data["pipes"][n]["area"] * ts.nominal_values[:area];
-#             linepack[i,:] .+= avgDensity .* (len * area)
-#         end
-#     end
-    
-#     for node in nodes
-#         pressures = zeros(length(ks), length(t_hrs));
-#         for i in 1:length(ks)
-#             pressures[i,:] = runs[ks[i]].sol["nodes"]["$(node)"]["pressure"];
-#         end
-#         qs = [quantile(pressures[:,i], quantiles) for i in 1:size(pressures)[2]];
-#         qs = hcat(qs...);
-#         for i in 1:floor(Int, length(quantiles)/2)
-#             plot!(p, t_hrs, qs[i,:], fillrange=qs[length(quantiles)-i+1,:], fillalpha=quantiles[i], c=node, 
-#                   label=nothing, linealpha=0);
-#         end
-#         plot!(p, t_hrs, qs[floor(Int, length(quantiles)/2)+1,:], c=node, label="\$ P_{n$(node)}(t)\$", legend=:bottomleft);
-#     end
-#     hrsPerTick = 4
-#     numTicks = floor(Int, t_hrs[end]/hrsPerTick);
-#     plot!(p, xlabel="time (hrs)", ylabel = "Pressure (pa)", legend=:bottomleft, xticks=([hrsPerTick*i for i in 1:numTicks]));
-
-#     addedPressureCrossings = false;
-# #        addPressureCrossings(p, runs, nodes=[1,6,9], quantiles=[0.125, 0.375, 0.5, 0.625, 0.875]);
-
-#     if (plotLinepack)
-#         qs = [quantile(linepack[:,i], quantiles) for i in 1:size(linepack)[2]];
-#         qs = hcat(qs...);
-#         ylims = (0.8*minimum(linepack), 1.2*maximum(linepack));
-#         for i in 1:floor(Int, length(quantiles)/2)
-#             plot!(twinx(p), t_hrs, qs[i,:], fillrange=qs[length(quantiles)-i+1,:], fillalpha=quantiles[i], c=2, 
-#                   label=nothing, linealpha=0, xticks=:none, yticks=:none, ylims=ylims);
-#         end
-#         plot!(twinx(p), t_hrs, qs[floor(Int, length(quantiles)/2)+1,:], c=2, label="Total Linepack", legend=false,
-#               xticks=:none, ylims=ylims, linestyle=:dash, ylabel="Linepack (kg)");
-#         plot!(p, right_margin=25Plots.mm);
-#         plot!(p, [],[],c=2,linestyle=:dash,label="Linepack");
-#     end
-#     return p;
-
-# end
 
 function plotMonteCarlo(runs; nodes=[1,6,8], quantiles=[0.125, 0.375, 0.5, 0.625, 0.875],
                         plotLinepack=true, plims=(55,85), llims=(7.0e5,8.5e5),
@@ -397,7 +352,7 @@ function plotMonteCarloPressure(runs; nodes=[1,8,6], quantiles=[0.125, 0.375, 0.
         qs = [quantile(pressures[:,i], quantiles) for i in 1:size(pressures)[2]];
         qs = hcat(qs...);
         for i in 1:floor(Int, length(quantiles)/2)
-            plot!(p, t_hrs, qs[i,:], fillrange=qs[length(quantiles)-i+1,:], fillalpha=quantiles[i], c=node, 
+            plot!(p, t_hrs, qs[i,:], fillrange=qs[length(quantiles)-i+1,:], fillalpha=quantiles[i]*1.5, c=node, 
                   label=nothing, linealpha=0);
         end
         plot!(p, t_hrs, qs[floor(Int, length(quantiles)/2)+1,:], c=node, label="\$ P_{$(node)}\$", legend=:bottomleft);
@@ -410,6 +365,26 @@ function plotMonteCarloPressure(runs; nodes=[1,8,6], quantiles=[0.125, 0.375, 0.
     return p;
 end
 
+function plotPressure(ts; nodes=[1,8,6], quantiles=[0.125, 0.375, 0.5, 0.625, 0.875],plims=(55,85))
+    pascalToBar = 1e-5;
+    p = plot();
+    runs = Dict(1=>ts);
+    ks = Array([keys(runs)...]);
+    t_hrs = runs[ks[1]].sol["time_points"] ./ 3600;
+    for node in nodes
+        pressures = zeros(length(ks), length(t_hrs));
+        for i in 1:length(ks)
+            pressures[i,:] = runs[ks[i]].sol["nodes"]["$(node)"]["pressure"] .* pascalToBar;
+        end
+        plot!(p, t_hrs, pressures[1,:], c=node, label="\$ P_{$(node)}\$", legend=:bottomleft);
+    end
+    hrsPerTick = 4
+    numTicks = floor(Int, t_hrs[end]/hrsPerTick);
+    plot!(p, xlabel="time (hrs)", ylabel = "Pressure (bar)", legend=:bottomleft,
+          xticks=([hrsPerTick*i for i in 1:numTicks]),
+          ylims=plims);
+    return p;
+end
 function plotMonteCarloLinepack(runs; quantiles=[0.125, 0.375, 0.5, 0.625, 0.875],p=nothing, llims=(7.0e5,8.5e5)) #runs = Dict(Int, transientsim)
     kgToMMBTU = 0.052;
     @assert isodd(length(quantiles));
@@ -452,7 +427,7 @@ function plotMonteCarloLinepack(runs; quantiles=[0.125, 0.375, 0.5, 0.625, 0.875
     end
     plot!(twinx(p), t_hrs, qs[floor(Int, length(quantiles)/2)+1,:], c=2, label="Total Linepack", legend=false,
           xticks=:none, ylims=llims, linestyle=:dash, ylabel="Linepack (MMBTU)");
-    plot!(p, right_margin=20Plots.mm);
+    plot!(p, right_margin=25Plots.mm);
     plot!(p, [],[],c=2,linestyle=:dash,label="Linepack");
     
     return p;
@@ -515,7 +490,7 @@ function plotHistogramOfCrossingTimes(runs; node=6, nbins=20)
 end
 function plotScen1(ts)
     d = Dict(1=>ts);
-    p = plotMonteCarlo(d, plotLinepack=true, plims=(55,83),llims=(6.5e5, 9.1e5))
+    p = plotMonteCarlo(d, plotLinepack=true, plims=(55,83),llims=(6.5e5, 9.1e5));
     return p;
 end
 
@@ -527,23 +502,60 @@ end
 function plotScen3(runs)
     p = plotMonteCarlo(runs, addPCrossings=true, pCrossNodes=[6,9,1],
                        plotLinepack=true, plims=(35,83), llims=(6.0e5,10.5e5));
+    scatter!(twinx(p), [36], [36], ylims=ylims(p), markershape=:utriangle, markercolor=:purple,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
     return p;
 end
 
 function plotScen4(runs)
     p = plotMonteCarlo(runs, addPCrossings=true, pCrossNodes=[6,9,1],
                        plotLinepack=true, plims=(35,83), llims=(6.0e5,10.5e5));
+    scatter!(twinx(p), [48], [36], ylims=ylims(p), markershape=:utriangle, markercolor=:purple,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
     return p;
 end
 
 function plotScen5(runs)
     p = plotMonteCarlo(runs, addPCrossings=true, pCrossNodes=[6,9,1],
                        plotLinepack=true, plims=(35,83), llims=(6.0e5,10.5e5));
+    scatter!(twinx(p), [48], [36], ylims=ylims(p), markershape=:utriangle, markercolor=:purple,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
+    scatter!(twinx(p), [48.75], [38], ylims=ylims(p), markershape=:dtriangle, markercolor=:red,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
     return p;
+end
+
+function plotScen5gif(ts)
+    t = [ts.sol["pipes"]["1"]["density_profile"][i].t for i in 1:length(ts.sol["pipes"]["1"]["density_profile"])] ./ 3600;
+    startNum = 1;
+    endNum = findfirst(x->x>=45,t)-1;
+    plot_pressure_profile("./scen5_part1.gif", ts, startNum=startNum, endNum=endNum);
+
+    startNum = endNum+1;
+    endNum = nothing;
+    plot_pressure_profile("./scen5_part2.gif", ts, startNum=startNum, endNum=endNum, fps=7);
 end
 
 function plotScen6(runs)
     p = plotMonteCarlo(runs, addPCrossings=true, pCrossNodes=[6,9,1],
                        plotLinepack=true, plims=(35,83), llims=(6.0e5,10.5e5));
+    scatter!(twinx(p), [48], [36], ylims=ylims(p), markershape=:utriangle, markercolor=:purple,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
+    scatter!(twinx(p), [48.75], [38], ylims=ylims(p), markershape=:dtriangle, markercolor=:red,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
+    scatter!(twinx(p), [50], [36], ylims=ylims(p), markershape=:utriangle, markercolor=:blue,
+             markersize=8,label=nothing, xticks=:none, yticks=:none);
+    return p;
+end
+
+function plotEnergySourcePercentages()
+    units = "GWh"
+    sources = repeat(["Coal"; "Natural Gas"; "Renewables (PV)"], outer=2)
+    vals_2020 = [0.3*60; 0.6*60; 0.1*60];
+    vals_2030 = [0.0;   0.84*60; 0.3*60];
+    vals = [vals_2020; vals_2030];
+    group = repeat(["2020", "2030"], inner=3);
+
+    p = groupedbar(sources, vals, group=group, ylabel=units, title="Israel Energy Portfolio")
     return p;
 end
