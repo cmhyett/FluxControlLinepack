@@ -6,7 +6,13 @@ We build and experiment with a realistic but reduced natural gas model of Israel
 The full paper is published as a part of PSIG 2023.
 
 ## Scenario 1 Illustration
-![Scenario 1 Results](./results/scen1.gif)
+![Scenario 1 Results](./results/scen1.png)
 
-## Scenario 6 Illustration
-![Scenario 6 Results](./results/scen6.gif)
+## Scenario 2 Illustration
+![Scenario 2 Results](./results/scen2.png)
+
+## Scenario 3 Illustration
+![Scenario 3 Results](./results/scen3.png)
+
+## Scenario 5 Illustration
+![Scenario 5 Results](./results/scen5.gif)
